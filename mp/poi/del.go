@@ -10,9 +10,9 @@ import (
 )
 
 // 删除门店.
-func (clt Client) PoiDelete(poiId string) (err error) {
+func (clt *Client) PoiDelete(poiId int64) (err error) {
 	var request = struct {
-		PoiId string `json:"poi_id"`
+		PoiId int64 `json:"poi_id,string"`
 	}{
 		PoiId: poiId,
 	}
@@ -20,7 +20,7 @@ func (clt Client) PoiDelete(poiId string) (err error) {
 	var result mp.Error
 
 	incompleteURL := "https://api.weixin.qq.com/cgi-bin/poi/delpoi?access_token="
-	if err = clt.PostJSON(incompleteURL, &request, &result); err != nil {
+	if err = ((*mp.Client)(clt)).PostJSON(incompleteURL, &request, &result); err != nil {
 		return
 	}
 

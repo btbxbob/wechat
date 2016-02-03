@@ -8,7 +8,6 @@
 package suite
 
 import (
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
@@ -17,6 +16,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/chanxuehong/util/security"
 
 	"github.com/chanxuehong/wechat/corp"
 	"github.com/chanxuehong/wechat/util"
@@ -42,11 +43,6 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 		msgSignature1 := queryValues.Get("msg_signature")
 		if msgSignature1 == "" {
 			errHandler.ServeError(w, r, errors.New("msg_signature is empty"))
-			return
-		}
-		if len(msgSignature1) != 40 { // sha1
-			err := fmt.Errorf("the length of msg_signature mismatch, have: %d, want: 40", len(msgSignature1))
-			errHandler.ServeError(w, r, err)
 			return
 		}
 
@@ -83,16 +79,10 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 			return
 		}
 
-		suiteId := srv.SuiteId()
-
 		haveSuiteId := requestHttpBody.SuiteId
-		if len(haveSuiteId) != len(suiteId) {
-			err = fmt.Errorf("the RequestHttpBody's ToUserName mismatch, have: %s, want: %s", haveSuiteId, suiteId)
-			errHandler.ServeError(w, r, err)
-			return
-		}
-		if subtle.ConstantTimeCompare([]byte(haveSuiteId), []byte(suiteId)) != 1 {
-			err = fmt.Errorf("the RequestHttpBody's ToUserName mismatch, have: %s, want: %s", haveSuiteId, suiteId)
+		wantSuiteId := srv.SuiteId()
+		if wantSuiteId != "" && !security.SecureCompareString(haveSuiteId, wantSuiteId) {
+			err = fmt.Errorf("the RequestHttpBody's ToUserName mismatch, have: %s, want: %s", haveSuiteId, wantSuiteId)
 			errHandler.ServeError(w, r, err)
 			return
 		}
@@ -101,7 +91,7 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 
 		// 验证签名
 		msgSignature2 := util.MsgSign(suiteToken, timestampStr, nonce, requestHttpBody.EncryptedMsg)
-		if subtle.ConstantTimeCompare([]byte(msgSignature1), []byte(msgSignature2)) != 1 {
+		if !security.SecureCompareString(msgSignature1, msgSignature2) {
 			err = fmt.Errorf("check msg_signature failed, input: %s, local: %s", msgSignature1, msgSignature2)
 			errHandler.ServeError(w, r, err)
 			return
@@ -115,7 +105,7 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 		}
 
 		aesKey := srv.CurrentAESKey()
-		random, rawMsgXML, err := util.AESDecryptMsg(encryptedMsgBytes, suiteId, aesKey)
+		random, rawMsgXML, aesSuiteId, err := util.AESDecryptMsg(encryptedMsgBytes, aesKey)
 		if err != nil {
 			// 尝试用上一次的 AESKey 来解密
 			lastAESKey, isLastAESKeyValid := srv.LastAESKey()
@@ -126,11 +116,16 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 
 			aesKey = lastAESKey // NOTE
 
-			random, rawMsgXML, err = util.AESDecryptMsg(encryptedMsgBytes, suiteId, aesKey)
+			random, rawMsgXML, aesSuiteId, err = util.AESDecryptMsg(encryptedMsgBytes, aesKey)
 			if err != nil {
 				errHandler.ServeError(w, r, err)
 				return
 			}
+		}
+		if haveSuiteId != string(aesSuiteId) {
+			err = fmt.Errorf("the RequestHttpBody's ToUserName(==%s) mismatch the SuiteId with aes encrypt(==%s)", haveSuiteId, aesSuiteId)
+			errHandler.ServeError(w, r, err)
+			return
 		}
 
 		corp.LogInfoln("[WECHAT_DEBUG] request msg raw xml:\r\n", string(rawMsgXML))
@@ -151,9 +146,11 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 
 		// 成功, 交给 MessageHandler
 		req := &Request{
-			HttpRequest: r,
+			SuiteToken: suiteToken,
 
-			QueryValues:  queryValues,
+			HttpRequest: r,
+			QueryValues: queryValues,
+
 			MsgSignature: msgSignature1,
 			Timestamp:    timestamp,
 			Nonce:        nonce,
@@ -161,11 +158,9 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 			RawMsgXML: rawMsgXML,
 			MixedMsg:  &mixedMsg,
 
-			AESKey: aesKey,
-			Random: random,
-
-			SuiteId:    haveSuiteId,
-			SuiteToken: suiteToken,
+			AESKey:  aesKey,
+			Random:  random,
+			SuiteId: haveSuiteId,
 		}
 		srv.MessageHandler().ServeMessage(w, req)
 
@@ -173,11 +168,6 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 		msgSignature1 := queryValues.Get("msg_signature")
 		if msgSignature1 == "" {
 			errHandler.ServeError(w, r, errors.New("msg_signature is empty"))
-			return
-		}
-		if len(msgSignature1) != 40 { // sha1
-			err := fmt.Errorf("the length of msg_signature mismatch, have: %d, want: 40", len(msgSignature1))
-			errHandler.ServeError(w, r, err)
 			return
 		}
 
@@ -200,7 +190,7 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 		}
 
 		msgSignature2 := util.MsgSign(srv.SuiteToken(), timestamp, nonce, encryptedMsg)
-		if subtle.ConstantTimeCompare([]byte(msgSignature1), []byte(msgSignature2)) != 1 {
+		if !security.SecureCompareString(msgSignature1, msgSignature2) {
 			err := fmt.Errorf("check msg_signature failed, input: %s, local: %s", msgSignature1, msgSignature2)
 			errHandler.ServeError(w, r, err)
 			return
@@ -213,10 +203,16 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 			return
 		}
 
-		suiteId := srv.SuiteId()
 		aesKey := srv.CurrentAESKey()
-		_, echostr, err := util.AESDecryptMsg(encryptedMsgBytes, suiteId, aesKey)
+		_, echostr, aesAppId, err := util.AESDecryptMsg(encryptedMsgBytes, aesKey)
 		if err != nil {
+			errHandler.ServeError(w, r, err)
+			return
+		}
+
+		wantAppId := srv.SuiteId()
+		if wantAppId != "" && !security.SecureCompare(aesAppId, []byte(wantAppId)) {
+			err = fmt.Errorf("AppId with aes encrypt mismatch, have: %s, want: %s", aesAppId, wantAppId)
 			errHandler.ServeError(w, r, err)
 			return
 		}

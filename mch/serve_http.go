@@ -7,12 +7,13 @@ package mch
 
 import (
 	"bytes"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/chanxuehong/util/security"
 
 	"github.com/chanxuehong/util"
 )
@@ -33,15 +34,10 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 		}
 
 		ReturnCode, ok := msg["return_code"]
-		if !ok || ReturnCode == ReturnCodeSuccess {
+		if ReturnCode == ReturnCodeSuccess || !ok {
 			haveAppId := msg["appid"]
 			wantAppId := srv.AppId()
-			if len(haveAppId) != len(wantAppId) {
-				err = fmt.Errorf("the message's appid mismatch, have: %s, want: %s", haveAppId, wantAppId)
-				errHandler.ServeError(w, r, err)
-				return
-			}
-			if subtle.ConstantTimeCompare([]byte(haveAppId), []byte(wantAppId)) != 1 {
+			if wantAppId != "" && !security.SecureCompareString(haveAppId, wantAppId) {
 				err = fmt.Errorf("the message's appid mismatch, have: %s, want: %s", haveAppId, wantAppId)
 				errHandler.ServeError(w, r, err)
 				return
@@ -49,12 +45,7 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 
 			haveMchId := msg["mch_id"]
 			wantMchId := srv.MchId()
-			if len(haveMchId) != len(wantMchId) {
-				err = fmt.Errorf("the message's mch_id mismatch, have: %s, want: %s", haveMchId, wantMchId)
-				errHandler.ServeError(w, r, err)
-				return
-			}
-			if subtle.ConstantTimeCompare([]byte(haveMchId), []byte(wantMchId)) != 1 {
+			if wantMchId != "" && !security.SecureCompareString(haveMchId, wantMchId) {
 				err = fmt.Errorf("the message's mch_id mismatch, have: %s, want: %s", haveMchId, wantMchId)
 				errHandler.ServeError(w, r, err)
 				return
@@ -68,12 +59,7 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 				return
 			}
 			signature2 := Sign(msg, srv.APIKey(), nil)
-			if len(signature1) != len(signature2) {
-				err = fmt.Errorf("check signature failed, \r\ninput: %q, \r\nlocal: %q", signature1, signature2)
-				errHandler.ServeError(w, r, err)
-				return
-			}
-			if subtle.ConstantTimeCompare([]byte(signature1), []byte(signature2)) != 1 {
+			if !security.SecureCompareString(signature1, signature2) {
 				err = fmt.Errorf("check signature failed, \r\ninput: %q, \r\nlocal: %q", signature1, signature2)
 				errHandler.ServeError(w, r, err)
 				return
@@ -89,6 +75,6 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, queryValues url.Values, s
 		srv.MessageHandler().ServeMessage(w, req)
 
 	default:
-		errHandler.ServeError(w, r, errors.New("Request.Method: "+r.Method))
+		errHandler.ServeError(w, r, errors.New("Not expect Request.Method: "+r.Method))
 	}
 }

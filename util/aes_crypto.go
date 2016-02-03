@@ -12,10 +12,7 @@ import (
 )
 
 // 把整数 n 格式化成 4 字节的网络字节序
-func encodeNetworkBytesOrder(orderBytes []byte, n int) {
-	if len(orderBytes) != 4 {
-		panic("the length of orderBytes must be equal to 4")
-	}
+func encodeNetworkByteOrder(orderBytes []byte, n uint32) {
 	orderBytes[0] = byte(n >> 24)
 	orderBytes[1] = byte(n >> 16)
 	orderBytes[2] = byte(n >> 8)
@@ -23,106 +20,103 @@ func encodeNetworkBytesOrder(orderBytes []byte, n int) {
 }
 
 // 从 4 字节的网络字节序里解析出整数
-func decodeNetworkBytesOrder(orderBytes []byte) (n int) {
-	if len(orderBytes) != 4 {
-		panic("the length of orderBytes must be equal to 4")
-	}
-	n = int(orderBytes[0])<<24 |
-		int(orderBytes[1])<<16 |
-		int(orderBytes[2])<<8 |
-		int(orderBytes[3])
-	return
+func decodeNetworkByteOrder(orderBytes []byte) (n uint32) {
+	return uint32(orderBytes[0])<<24 |
+		uint32(orderBytes[1])<<16 |
+		uint32(orderBytes[2])<<8 |
+		uint32(orderBytes[3])
 }
 
-// encryptedMsg = AES_Encrypt[random(16B) + msg_len(4B) + rawXMLMsg + AppId]
-func AESEncryptMsg(random, rawXMLMsg []byte, AppId string, AESKey [32]byte) (encryptedMsg []byte) {
-	const BLOCK_SIZE = 32 // PKCS#7
+// ciphertext = AES_Encrypt[random(16B) + msg_len(4B) + rawXMLMsg + appId]
+func AESEncryptMsg(random, rawXMLMsg []byte, appId string, aesKey [32]byte) (ciphertext []byte) {
+	const (
+		BLOCK_SIZE = 32             // PKCS#7
+		BLOCK_MASK = BLOCK_SIZE - 1 // BLOCK_SIZE 为 2^n 时, 可以用 mask 获取针对 BLOCK_SIZE 的余数
+	)
 
-	buf := make([]byte, 20+len(rawXMLMsg)+len(AppId)+BLOCK_SIZE)
-	plain := buf[:20]
-	pad := buf[len(buf)-BLOCK_SIZE:]
+	appIdOffset := 20 + len(rawXMLMsg)
+	contentLen := appIdOffset + len(appId)
+	amountToPad := BLOCK_SIZE - contentLen&BLOCK_MASK
+	plaintextLen := contentLen + amountToPad
+
+	plaintext := make([]byte, plaintextLen)
 
 	// 拼接
-	copy(plain, random)
-	encodeNetworkBytesOrder(plain[16:20], len(rawXMLMsg))
-	plain = append(plain, rawXMLMsg...)
-	plain = append(plain, AppId...)
+	copy(plaintext[:16], random)
+	encodeNetworkByteOrder(plaintext[16:20], uint32(len(rawXMLMsg)))
+	copy(plaintext[20:], rawXMLMsg)
+	copy(plaintext[appIdOffset:], appId)
 
 	// PKCS#7 补位
-	amountToPad := BLOCK_SIZE - len(plain)%BLOCK_SIZE
-	for i := 0; i < amountToPad; i++ {
-		pad[i] = byte(amountToPad)
+	for i := contentLen; i < plaintextLen; i++ {
+		plaintext[i] = byte(amountToPad)
 	}
-	plain = buf[:len(plain)+amountToPad]
 
 	// 加密
-	block, err := aes.NewCipher(AESKey[:])
+	block, err := aes.NewCipher(aesKey[:])
 	if err != nil {
 		panic(err)
 	}
-	mode := cipher.NewCBCEncrypter(block, AESKey[:16])
-	mode.CryptBlocks(plain, plain)
+	mode := cipher.NewCBCEncrypter(block, aesKey[:16])
+	mode.CryptBlocks(plaintext, plaintext)
 
-	encryptedMsg = plain
+	ciphertext = plaintext
 	return
 }
 
-// encryptedMsg = AES_Encrypt[random(16B) + msg_len(4B) + rawXMLMsg + AppId]
-func AESDecryptMsg(encryptedMsg []byte, AppId string, AESKey [32]byte) (random, rawXMLMsg []byte, err error) {
-	const BLOCK_SIZE = 32 // PKCS#7
+// ciphertext = AES_Encrypt[random(16B) + msg_len(4B) + rawXMLMsg + appId]
+func AESDecryptMsg(ciphertext []byte, aesKey [32]byte) (random, rawXMLMsg, appId []byte, err error) {
+	const (
+		BLOCK_SIZE = 32             // PKCS#7
+		BLOCK_MASK = BLOCK_SIZE - 1 // BLOCK_SIZE 为 2^n 时, 可以用 mask 获取针对 BLOCK_SIZE 的余数
+	)
 
-	if len(encryptedMsg) < BLOCK_SIZE {
-		err = fmt.Errorf("the length of encryptedMsg too short: %d", len(encryptedMsg))
+	if len(ciphertext) < BLOCK_SIZE {
+		err = fmt.Errorf("the length of ciphertext too short: %d", len(ciphertext))
 		return
 	}
-	if len(encryptedMsg)%BLOCK_SIZE != 0 {
-		err = fmt.Errorf("encryptedMsg is not a multiple of the block size, the length is %d", len(encryptedMsg))
+	if len(ciphertext)&BLOCK_MASK != 0 {
+		err = fmt.Errorf("ciphertext is not a multiple of the block size, the length is %d", len(ciphertext))
 		return
 	}
 
-	plain := make([]byte, len(encryptedMsg)) // len(plain) >= BLOCK_SIZE
+	plaintext := make([]byte, len(ciphertext)) // len(plaintext) >= BLOCK_SIZE
 
 	// 解密
-	block, err := aes.NewCipher(AESKey[:])
+	block, err := aes.NewCipher(aesKey[:])
 	if err != nil {
 		panic(err)
 	}
-	mode := cipher.NewCBCDecrypter(block, AESKey[:16])
-	mode.CryptBlocks(plain, encryptedMsg)
+	mode := cipher.NewCBCDecrypter(block, aesKey[:16])
+	mode.CryptBlocks(plaintext, ciphertext)
 
 	// PKCS#7 去除补位
-	amountToPad := int(plain[len(plain)-1])
+	amountToPad := int(plaintext[len(plaintext)-1])
 	if amountToPad < 1 || amountToPad > BLOCK_SIZE {
-		err = fmt.Errorf("the amount to pad is invalid: %d", amountToPad)
+		err = fmt.Errorf("the amount to pad is incorrect: %d", amountToPad)
 		return
 	}
-	plain = plain[:len(plain)-amountToPad]
+	plaintext = plaintext[:len(plaintext)-amountToPad]
 
-	// 反拼装
-	// len(plain) == 16+4+len(rawXMLMsg)+len(AppId)
-	// len(AppId) > 0
-	if len(plain) <= 20 {
-		err = fmt.Errorf("plain msg too short, the length is %d", len(plain))
+	// 反拼接
+	// len(plaintext) == 16+4+len(rawXMLMsg)+len(appId)
+	if len(plaintext) <= 20 {
+		err = fmt.Errorf("plaintext too short, the length is %d", len(plaintext))
 		return
 	}
-	msgLen := decodeNetworkBytesOrder(plain[16:20])
-	if msgLen < 0 {
-		err = fmt.Errorf("invalid msg length: %d", msgLen)
+	rawXMLMsgLen := int(decodeNetworkByteOrder(plaintext[16:20]))
+	if rawXMLMsgLen < 0 {
+		err = fmt.Errorf("incorrect msg length: %d", rawXMLMsgLen)
 		return
 	}
-	msgEnd := 20 + msgLen
-	if len(plain) <= msgEnd {
-		err = fmt.Errorf("msg length too large: %d", msgLen)
-		return
-	}
-
-	AppIdHave := string(plain[msgEnd:])
-	if AppIdHave != AppId { // crypto/subtle.ConstantTimeCompare ???
-		err = fmt.Errorf("AppId mismatch, have: %s, want: %s", AppIdHave, AppId)
+	appIdOffset := 20 + rawXMLMsgLen
+	if len(plaintext) <= appIdOffset {
+		err = fmt.Errorf("msg length too large: %d", rawXMLMsgLen)
 		return
 	}
 
-	random = plain[:16:16]
-	rawXMLMsg = plain[20:msgEnd]
+	random = plaintext[:16:20]
+	rawXMLMsg = plaintext[20:appIdOffset:appIdOffset]
+	appId = plaintext[appIdOffset:]
 	return
 }
