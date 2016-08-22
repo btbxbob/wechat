@@ -1,16 +1,11 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package card
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 // 创建卡券.
-func Create(clt *mp.Client, card *Card) (cardId string, err error) {
+func Create(clt *core.Client, card *Card) (cardId string, err error) {
 	request := struct {
 		Card *Card `json:"card,omitempty"`
 	}{
@@ -18,7 +13,7 @@ func Create(clt *mp.Client, card *Card) (cardId string, err error) {
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		CardId string `json:"card_id"`
 	}
 
@@ -27,7 +22,7 @@ func Create(clt *mp.Client, card *Card) (cardId string, err error) {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
@@ -36,7 +31,7 @@ func Create(clt *mp.Client, card *Card) (cardId string, err error) {
 }
 
 // 查看卡券详情.
-func Get(clt *mp.Client, cardId string) (card *Card, err error) {
+func Get(clt *core.Client, cardId string) (card *Card, err error) {
 	request := struct {
 		CardId string `json:"card_id"`
 	}{
@@ -44,7 +39,7 @@ func Get(clt *mp.Client, cardId string) (card *Card, err error) {
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		Card `json:"card"`
 	}
 
@@ -53,7 +48,7 @@ func Get(clt *mp.Client, cardId string) (card *Card, err error) {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
@@ -74,9 +69,9 @@ type BatchGetResult struct {
 }
 
 // 批量查询卡列表.
-func BatchGet(clt *mp.Client, query *BatchGetQuery) (rslt *BatchGetResult, err error) {
+func BatchGet(clt *core.Client, query *BatchGetQuery) (rslt *BatchGetResult, err error) {
 	var result struct {
-		mp.Error
+		core.Error
 		BatchGetResult
 	}
 
@@ -85,7 +80,7 @@ func BatchGet(clt *mp.Client, query *BatchGetQuery) (rslt *BatchGetResult, err e
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
@@ -96,7 +91,7 @@ func BatchGet(clt *mp.Client, query *BatchGetQuery) (rslt *BatchGetResult, err e
 
 // 更改卡券信息接口.
 //  sendCheck: 是否提交审核，false为修改后不会重新提审，true为修改字段后重新提审，该卡券的状态变为审核中。
-func Update(clt *mp.Client, cardId string, card *Card) (sendCheck bool, err error) {
+func Update(clt *core.Client, cardId string, card *Card) (sendCheck bool, err error) {
 	request := struct {
 		CardId string `json:"card_id"`
 		*Card
@@ -106,7 +101,7 @@ func Update(clt *mp.Client, cardId string, card *Card) (sendCheck bool, err erro
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		SendCheck bool `json:"send_check"`
 	}
 
@@ -114,7 +109,7 @@ func Update(clt *mp.Client, cardId string, card *Card) (sendCheck bool, err erro
 	if err = clt.PostJSON(incompleteURL, &request, &result); err != nil {
 		return
 	}
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
@@ -125,7 +120,7 @@ func Update(clt *mp.Client, cardId string, card *Card) (sendCheck bool, err erro
 // 库存修改接口.
 // cardId:      卡券ID
 // increaseNum: 增加库存数量, 可以为负数
-func ModifyStock(clt *mp.Client, cardId string, increaseNum int) (err error) {
+func ModifyStock(clt *core.Client, cardId string, increaseNum int) (err error) {
 	request := struct {
 		CardId             string `json:"card_id"`
 		IncreaseStockValue int    `json:"increase_stock_value,omitempty"`
@@ -142,14 +137,14 @@ func ModifyStock(clt *mp.Client, cardId string, increaseNum int) (err error) {
 		return
 	}
 
-	var result mp.Error
+	var result core.Error
 
 	incompleteURL := "https://api.weixin.qq.com/card/modifystock?access_token="
 	if err = clt.PostJSON(incompleteURL, &request, &result); err != nil {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result
 		return
 	}
@@ -157,21 +152,21 @@ func ModifyStock(clt *mp.Client, cardId string, increaseNum int) (err error) {
 }
 
 // 删除卡券
-func Delete(clt *mp.Client, cardId string) (err error) {
+func Delete(clt *core.Client, cardId string) (err error) {
 	request := struct {
 		CardId string `json:"card_id"`
 	}{
 		CardId: cardId,
 	}
 
-	var result mp.Error
+	var result core.Error
 
 	incompleteURL := "https://api.weixin.qq.com/card/delete?access_token="
 	if err = clt.PostJSON(incompleteURL, &request, &result); err != nil {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result
 		return
 	}

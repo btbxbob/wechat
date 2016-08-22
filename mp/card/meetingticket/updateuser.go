@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package meetingticket
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type UpdateUserParameters struct {
@@ -21,15 +16,15 @@ type UpdateUserParameters struct {
 }
 
 // 更新会议门票
-func UpdateUser(clt *mp.Client, para *UpdateUserParameters) (err error) {
-	var result mp.Error
+func UpdateUser(clt *core.Client, para *UpdateUserParameters) (err error) {
+	var result core.Error
 
 	incompleteURL := "https://api.weixin.qq.com/card/meetingticket/updateuser?access_token="
 	if err = clt.PostJSON(incompleteURL, para, &result); err != nil {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result
 		return
 	}

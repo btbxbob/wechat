@@ -1,17 +1,12 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package statistics
 
 import (
-	"github.com/chanxuehong/wechat/mp"
-	"github.com/chanxuehong/wechat/mp/shakearound/device"
+	"github.com/chanxuehong/wechat.v2/mp/core"
+	"github.com/chanxuehong/wechat.v2/mp/shakearound/device"
 )
 
 // 以设备为维度的数据统计接口
-func Device(clt *mp.Client, deviceIdentifier *device.DeviceIdentifier, beginDate, endDate int64) (data []StatisticsBase, err error) {
+func Device(clt *core.Client, deviceIdentifier *device.DeviceIdentifier, beginDate, endDate int64) (data []StatisticsBase, err error) {
 	request := struct {
 		DeviceIdentifier *device.DeviceIdentifier `json:"device_identifier,omitempty"`
 		BeginDate        int64                    `json:"begin_date"`
@@ -23,7 +18,7 @@ func Device(clt *mp.Client, deviceIdentifier *device.DeviceIdentifier, beginDate
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		Data []StatisticsBase `json:"data"`
 	}
 
@@ -32,7 +27,7 @@ func Device(clt *mp.Client, deviceIdentifier *device.DeviceIdentifier, beginDate
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

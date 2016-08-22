@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package user
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type BeaconInfo struct {
@@ -26,7 +21,7 @@ type Shakeinfo struct {
 // 获取摇周边的设备及用户信息
 //  ticket:  摇周边业务的ticket，可在摇到的URL中得到，ticket生效时间为30分钟，每一次摇都会重新生成新的ticket
 //  needPoi: 是否需要返回门店poi_id
-func GetShakeInfo(clt *mp.Client, ticket string, needPoi bool) (info *Shakeinfo, err error) {
+func GetShakeInfo(clt *core.Client, ticket string, needPoi bool) (info *Shakeinfo, err error) {
 	request := struct {
 		Ticket  string `json:"ticket"`
 		NeedPoi int    `json:"need_poi,omitempty"`
@@ -39,7 +34,7 @@ func GetShakeInfo(clt *mp.Client, ticket string, needPoi bool) (info *Shakeinfo,
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		Shakeinfo `json:"data"`
 	}
 
@@ -48,7 +43,7 @@ func GetShakeInfo(clt *mp.Client, ticket string, needPoi bool) (info *Shakeinfo,
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

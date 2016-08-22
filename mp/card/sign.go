@@ -1,14 +1,9 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package card
 
 import (
+	"bufio"
 	"crypto/sha1"
 	"encoding/hex"
-	"io"
 	"sort"
 )
 
@@ -18,8 +13,12 @@ func Sign(strs []string) (signature string) {
 	sort.Strings(strs)
 
 	h := sha1.New()
+
+	bufw := bufio.NewWriterSize(h, 128) // sha1.BlockSize 的整数倍
 	for _, str := range strs {
-		io.WriteString(h, str)
+		bufw.WriteString(str)
 	}
+	bufw.Flush()
+
 	return hex.EncodeToString(h.Sum(nil))
 }

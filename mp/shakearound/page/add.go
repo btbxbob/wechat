@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package page
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type AddParameters struct {
@@ -18,9 +13,9 @@ type AddParameters struct {
 }
 
 // 新增页面
-func Add(clt *mp.Client, para *AddParameters) (pageId int64, err error) {
+func Add(clt *core.Client, para *AddParameters) (pageId int64, err error) {
 	var result struct {
-		mp.Error
+		core.Error
 		Data struct {
 			PageId int64 `json:"page_id"`
 		} `json:"data"`
@@ -31,7 +26,7 @@ func Add(clt *mp.Client, para *AddParameters) (pageId int64, err error) {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

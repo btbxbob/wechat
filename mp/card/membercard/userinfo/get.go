@@ -1,13 +1,8 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package userinfo
 
 import (
-	"github.com/chanxuehong/wechat/mp"
-	"github.com/chanxuehong/wechat/mp/card/code"
+	"github.com/chanxuehong/wechat.v2/mp/card/code"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type CustomField struct {
@@ -23,9 +18,9 @@ type UserInfo struct {
 }
 
 // 拉取会员信息（积分查询）接口
-func Get(clt *mp.Client, id *code.CardItemIdentifier) (info *UserInfo, err error) {
+func Get(clt *core.Client, id *code.CardItemIdentifier) (info *UserInfo, err error) {
 	var result struct {
-		mp.Error
+		core.Error
 		UserInfo
 	}
 
@@ -34,7 +29,7 @@ func Get(clt *mp.Client, id *code.CardItemIdentifier) (info *UserInfo, err error
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

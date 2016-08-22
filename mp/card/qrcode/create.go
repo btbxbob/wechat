@@ -1,17 +1,12 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package qrcode
 
 import (
 	"net/url"
 
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
-func QRCodePicURL(ticket string) string {
+func QrcodePicURL(ticket string) string {
 	return "https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket=" + url.QueryEscape(ticket)
 }
 
@@ -24,14 +19,14 @@ type CreateParameters struct {
 	OuterId       *int64 `json:"outer_id,omitempty"`       // 可选; 领取场景值，用于领取渠道的数据统计，默认值为0，字段类型为整型，长度限制为60位数字。用户领取卡券后触发的事件推送中会带上此自定义场景值。
 }
 
-type QRCodeInfo struct {
+type QrcodeInfo struct {
 	Ticket        string `json:"ticket"`
 	URL           string `json:"url"`
 	ExpireSeconds int    `json:"expire_seconds"` // 0 表示永久二维码
 }
 
 // 卡券投放, 创建二维码接口.
-func Create(clt *mp.Client, para *CreateParameters) (info *QRCodeInfo, err error) {
+func Create(clt *core.Client, para *CreateParameters) (info *QrcodeInfo, err error) {
 	request := struct {
 		ActionName    string `json:"action_name"`
 		ExpireSeconds int    `json:"expire_seconds,omitempty"`
@@ -45,8 +40,8 @@ func Create(clt *mp.Client, para *CreateParameters) (info *QRCodeInfo, err error
 	request.ActionInfo.Card = para
 
 	var result struct {
-		mp.Error
-		QRCodeInfo
+		core.Error
+		QrcodeInfo
 	}
 
 	incompleteURL := "https://api.weixin.qq.com/card/qrcode/create?access_token="
@@ -54,10 +49,10 @@ func Create(clt *mp.Client, para *CreateParameters) (info *QRCodeInfo, err error
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
-	info = &result.QRCodeInfo
+	info = &result.QrcodeInfo
 	return
 }

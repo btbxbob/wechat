@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package statistics
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 const DeviceListPageSize = 50
@@ -24,7 +19,7 @@ type DeviceListResult struct {
 }
 
 // 批量查询设备统计数据接口
-func DeviceList(clt *mp.Client, date int64, pageIndex int) (rslt *DeviceListResult, err error) {
+func DeviceList(clt *core.Client, date int64, pageIndex int) (rslt *DeviceListResult, err error) {
 	request := struct {
 		Date      int64 `json:"date"`
 		PageIndex int   `json:"page_index"`
@@ -34,7 +29,7 @@ func DeviceList(clt *mp.Client, date int64, pageIndex int) (rslt *DeviceListResu
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		DeviceListResult
 	}
 
@@ -43,7 +38,7 @@ func DeviceList(clt *mp.Client, date int64, pageIndex int) (rslt *DeviceListResu
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
@@ -72,13 +67,13 @@ func DeviceList(clt *mp.Client, date int64, pageIndex int) (rslt *DeviceListResu
 //      // TODO: 增加你的代码
 //  }
 type DeviceStatisticsIterator struct {
-	clt *mp.Client
+	clt *core.Client
 
 	date          int64
 	nextPageIndex int
 
 	lastDeviceListResult *DeviceListResult // 最近一次获取的数据
-	nextPageHasCalled    bool              // NextPage() 是否调用过
+	nextPageCalled       bool              // NextPage() 是否调用过
 }
 
 func (iter *DeviceStatisticsIterator) TotalCount() int {
@@ -86,7 +81,7 @@ func (iter *DeviceStatisticsIterator) TotalCount() int {
 }
 
 func (iter *DeviceStatisticsIterator) HasNext() bool {
-	if !iter.nextPageHasCalled { // 第一次调用需要特殊对待
+	if !iter.nextPageCalled { // 第一次调用需要特殊对待
 		return iter.lastDeviceListResult.ItemCount > 0
 	}
 
@@ -94,8 +89,8 @@ func (iter *DeviceStatisticsIterator) HasNext() bool {
 }
 
 func (iter *DeviceStatisticsIterator) NextPage() (statisticsList []DeviceStatistics, err error) {
-	if !iter.nextPageHasCalled { // 第一次调用需要特殊对待
-		iter.nextPageHasCalled = true
+	if !iter.nextPageCalled { // 第一次调用需要特殊对待
+		iter.nextPageCalled = true
 
 		statisticsList = iter.lastDeviceListResult.Data.DeviceStatisticsList
 		return
@@ -113,7 +108,7 @@ func (iter *DeviceStatisticsIterator) NextPage() (statisticsList []DeviceStatist
 	return
 }
 
-func NewDeviceStatisticsIterator(clt *mp.Client, date int64, pageIndex int) (iter *DeviceStatisticsIterator, err error) {
+func NewDeviceStatisticsIterator(clt *core.Client, date int64, pageIndex int) (iter *DeviceStatisticsIterator, err error) {
 	// 逻辑上相当于第一次调用 DeviceStatisticsIterator.NextPage, 因为第一次调用 DeviceStatisticsIterator.HasNext 需要数据支撑, 所以提前获取了数据
 
 	rslt, err := DeviceList(clt, date, pageIndex)
@@ -128,7 +123,7 @@ func NewDeviceStatisticsIterator(clt *mp.Client, date int64, pageIndex int) (ite
 		nextPageIndex: pageIndex + 1,
 
 		lastDeviceListResult: rslt,
-		nextPageHasCalled:    false,
+		nextPageCalled:       false,
 	}
 	return
 }

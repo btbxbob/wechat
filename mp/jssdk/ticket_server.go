@@ -1,181 +1,148 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package jssdk
 
 import (
 	"errors"
+	"math/rand"
 	"strconv"
-	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 // jsapi_ticket 中控服务器接口.
 type TicketServer interface {
-	// 从中控服务器获取被缓存的 jsapi_ticket.
-	Ticket() (string, error)
-
-	// 请求中控服务器到微信服务器刷新 jsapi_ticket.
-	//
-	//  高并发场景下某个时间点可能有很多请求(比如缓存的 jsapi_ticket 刚好过期时), 但是我们
-	//  不期望也没有必要让这些请求都去微信服务器获取 jsapi_ticket(有可能导致api超过调用限制),
-	//  实际上这些请求只需要一个新的 jsapi_ticket 即可, 所以建议 TicketServer 从微信服务器
-	//  获取一次 jsapi_ticket 之后的至多5秒内(收敛时间, 视情况而定, 理论上至多5个http或tcp周期)
-	//  再次调用该函数不再去微信服务器获取, 而是直接返回之前的结果.
-	TicketRefresh() (string, error)
-
-	// 没有实际意义, 接口标识
-	TagB38894EBFE9911E4BE17A4DB30FED8E1()
+	Ticket() (ticket string, err error)                            // 请求中控服务器返回缓存的 jsapi_ticket
+	RefreshTicket(currentTicket string) (ticket string, err error) // 请求中控服务器刷新 jsapi_ticket
+	IIDB04E44A0E1DC11E5ADCEA4DB30FED8E1()                          // 接口标识, 没有实际意义
 }
 
 var _ TicketServer = (*DefaultTicketServer)(nil)
 
-// TicketServer 的简单实现.
+// DefaultTicketServer 实现了 TicketServer 接口.
 //  NOTE:
 //  1. 用于单进程环境.
 //  2. 因为 DefaultTicketServer 同时也是一个简单的中控服务器, 而不是仅仅实现 TicketServer 接口,
 //     所以整个系统只能存在一个 DefaultTicketServer 实例!
 type DefaultTicketServer struct {
-	mpClient *mp.Client
+	coreClient *core.Client
 
-	resetTickerChan chan time.Duration // 用于重置 ticketDaemon 里的 ticker
+	refreshTicketRequestChan  chan string              // chan currentTicket
+	refreshTicketResponseChan chan refreshTicketResult // chan {ticket, err}
 
-	ticketGet struct {
-		sync.Mutex
-		LastTicketInfo ticketInfo // 最后一次成功从微信服务器获取的 jsapi_ticket 信息
-		LastTimestamp  int64      // 最后一次成功从微信服务器获取 jsapi_ticket 的时间戳
-	}
-
-	ticketCache struct {
-		sync.RWMutex
-		Ticket string
-	}
+	ticketCache unsafe.Pointer // *jsapiTicket
 }
 
-// 创建一个新的 DefaultTicketServer.
-func NewDefaultTicketServer(clt *mp.Client) (srv *DefaultTicketServer) {
+// NewDefaultTicketServer 创建一个新的 DefaultTicketServer.
+func NewDefaultTicketServer(clt *core.Client) (srv *DefaultTicketServer) {
 	if clt == nil {
-		panic("nil mp.Client")
+		panic("nil core.Client")
 	}
-
 	srv = &DefaultTicketServer{
-		mpClient:        clt,
-		resetTickerChan: make(chan time.Duration),
+		coreClient:                clt,
+		refreshTicketRequestChan:  make(chan string),
+		refreshTicketResponseChan: make(chan refreshTicketResult),
 	}
 
-	go srv.ticketDaemon(time.Hour * 24) // 启动 tokenDaemon
+	go srv.ticketUpdateDaemon(time.Hour * 24 * time.Duration(100+rand.Int63n(200)))
 	return
 }
 
-func (srv *DefaultTicketServer) TagB38894EBFE9911E4BE17A4DB30FED8E1() {}
+func (srv *DefaultTicketServer) IIDB04E44A0E1DC11E5ADCEA4DB30FED8E1() {}
 
 func (srv *DefaultTicketServer) Ticket() (ticket string, err error) {
-	srv.ticketCache.RLock()
-	ticket = srv.ticketCache.Ticket
-	srv.ticketCache.RUnlock()
-
-	if ticket != "" {
-		return
+	if p := (*jsapiTicket)(atomic.LoadPointer(&srv.ticketCache)); p != nil {
+		return p.Ticket, nil
 	}
-	return srv.TicketRefresh()
+	return srv.RefreshTicket("")
 }
 
-func (srv *DefaultTicketServer) TicketRefresh() (ticket string, err error) {
-	ticketInfo, cached, err := srv.getTicket()
-	if err != nil {
-		return
-	}
-	if !cached {
-		srv.resetTickerChan <- time.Duration(ticketInfo.ExpiresIn) * time.Second
-	}
-	ticket = ticketInfo.Ticket
-	return
+type refreshTicketResult struct {
+	ticket string
+	err    error
 }
 
-func (srv *DefaultTicketServer) ticketDaemon(tickDuration time.Duration) {
+func (srv *DefaultTicketServer) RefreshTicket(currentTicket string) (ticket string, err error) {
+	srv.refreshTicketRequestChan <- currentTicket
+	rslt := <-srv.refreshTicketResponseChan
+	return rslt.ticket, rslt.err
+}
+
+func (srv *DefaultTicketServer) ticketUpdateDaemon(initTickDuration time.Duration) {
+	tickDuration := initTickDuration
+
 NEW_TICK_DURATION:
 	ticker := time.NewTicker(tickDuration)
-
 	for {
 		select {
-		case tickDuration = <-srv.resetTickerChan:
-			ticker.Stop()
-			goto NEW_TICK_DURATION
+		case currentTicket := <-srv.refreshTicketRequestChan:
+			jsapiTicket, cached, err := srv.updateTicket(currentTicket)
+			if err != nil {
+				srv.refreshTicketResponseChan <- refreshTicketResult{err: err}
+				break
+			}
+			srv.refreshTicketResponseChan <- refreshTicketResult{ticket: jsapiTicket.Ticket}
+			if !cached {
+				tickDuration = time.Duration(jsapiTicket.ExpiresIn) * time.Second
+				ticker.Stop()
+				goto NEW_TICK_DURATION
+			}
 
 		case <-ticker.C:
-			ticketInfo, cached, err := srv.getTicket()
+			jsapiTicket, _, err := srv.updateTicket("")
 			if err != nil {
 				break
 			}
-			if !cached {
-				newTickDuration := time.Duration(ticketInfo.ExpiresIn) * time.Second
-				if tickDuration != newTickDuration {
-					tickDuration = newTickDuration
-					ticker.Stop()
-					goto NEW_TICK_DURATION
-				}
+			newTickDuration := time.Duration(jsapiTicket.ExpiresIn) * time.Second
+			if abs(tickDuration-newTickDuration) > time.Second*5 {
+				tickDuration = newTickDuration
+				ticker.Stop()
+				goto NEW_TICK_DURATION
 			}
 		}
 	}
 }
 
-type ticketInfo struct {
-	Ticket    string `json:"ticket"`
-	ExpiresIn int64  `json:"expires_in"` // 有效时间, seconds
+func abs(x time.Duration) time.Duration {
+	if x >= 0 {
+		return x
+	}
+	return -x
 }
 
-// 从微信服务器获取 jsapi_ticket.
-//  同一时刻只能一个 goroutine 进入, 防止没必要的重复获取.
-func (srv *DefaultTicketServer) getTicket() (ticket ticketInfo, cached bool, err error) {
-	srv.ticketGet.Lock()
-	defer srv.ticketGet.Unlock()
+type jsapiTicket struct {
+	Ticket    string `json:"ticket"`
+	ExpiresIn int64  `json:"expires_in"`
+}
 
-	timeNowUnix := time.Now().Unix()
-
-	// 在收敛周期内直接返回最近一次获取的 jsapi_ticket, 这里的收敛时间设定为4秒
-	if n := srv.ticketGet.LastTimestamp; n <= timeNowUnix && timeNowUnix < n+4 {
-		// 因为只有成功获取后才会更新 srv.tokenGet.LastTimestamp, 所以这些都是有效数据
-		ticket = ticketInfo{
-			Ticket:    srv.ticketGet.LastTicketInfo.Ticket,
-			ExpiresIn: srv.ticketGet.LastTicketInfo.ExpiresIn - timeNowUnix + n,
+// updateTicket 从微信服务器获取新的 jsapi_ticket 并存入缓存, 同时返回该 jsapi_ticket.
+func (srv *DefaultTicketServer) updateTicket(currentTicket string) (ticket *jsapiTicket, cached bool, err error) {
+	if currentTicket != "" {
+		if p := (*jsapiTicket)(atomic.LoadPointer(&srv.ticketCache)); p != nil && currentTicket != p.Ticket {
+			return p, true, nil // 无需更改 p.ExpiresIn 参数值, cached == true 时用不到
 		}
-		cached = true
-		return
 	}
 
+	var incompleteURL = "https://api.weixin.qq.com/cgi-bin/ticket/getticket?type=jsapi&access_token="
 	var result struct {
-		mp.Error
-		ticketInfo
+		core.Error
+		jsapiTicket
 	}
-
-	incompleteURL := "https://api.weixin.qq.com/cgi-bin/ticket/getticket?type=jsapi&access_token="
-	if err = srv.mpClient.GetJSON(incompleteURL, &result); err != nil {
-		srv.ticketCache.Lock()
-		srv.ticketCache.Ticket = ""
-		srv.ticketCache.Unlock()
+	if err = srv.coreClient.GetJSON(incompleteURL, &result); err != nil {
+		atomic.StorePointer(&srv.ticketCache, nil)
 		return
 	}
-
-	if result.ErrCode != mp.ErrCodeOK {
-		srv.ticketCache.Lock()
-		srv.ticketCache.Ticket = ""
-		srv.ticketCache.Unlock()
-
+	if result.ErrCode != core.ErrCodeOK {
+		atomic.StorePointer(&srv.ticketCache, nil)
 		err = &result.Error
 		return
 	}
 
-	// 由于网络的延时, jsapi_ticket 过期时间留了一个缓冲区
+	// 由于网络的延时, jsapi_ticket 过期时间留有一个缓冲区
 	switch {
 	case result.ExpiresIn > 31556952: // 60*60*24*365.2425
-		srv.ticketCache.Lock()
-		srv.ticketCache.Ticket = ""
-		srv.ticketCache.Unlock()
-
+		atomic.StorePointer(&srv.ticketCache, nil)
 		err = errors.New("expires_in too large: " + strconv.FormatInt(result.ExpiresIn, 10))
 		return
 	case result.ExpiresIn > 60*60:
@@ -187,21 +154,13 @@ func (srv *DefaultTicketServer) getTicket() (ticket ticketInfo, cached bool, err
 	case result.ExpiresIn > 60:
 		result.ExpiresIn -= 10
 	default:
-		srv.ticketCache.Lock()
-		srv.ticketCache.Ticket = ""
-		srv.ticketCache.Unlock()
-
+		atomic.StorePointer(&srv.ticketCache, nil)
 		err = errors.New("expires_in too small: " + strconv.FormatInt(result.ExpiresIn, 10))
 		return
 	}
 
-	srv.ticketGet.LastTicketInfo = result.ticketInfo
-	srv.ticketGet.LastTimestamp = timeNowUnix
-
-	srv.ticketCache.Lock()
-	srv.ticketCache.Ticket = result.ticketInfo.Ticket
-	srv.ticketCache.Unlock()
-
-	ticket = result.ticketInfo
+	ticketCopy := result.jsapiTicket
+	atomic.StorePointer(&srv.ticketCache, unsafe.Pointer(&ticketCopy))
+	ticket = &ticketCopy
 	return
 }

@@ -1,8 +1,3 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package pay
 
 import (
@@ -15,33 +10,17 @@ import (
 	"os"
 
 	"github.com/chanxuehong/util"
-	"github.com/chanxuehong/wechat/mch"
+	"github.com/chanxuehong/wechat.v2/mch/core"
 )
 
-// 统一下单.
-func UnifiedOrder(pxy *mch.Proxy, req map[string]string) (resp map[string]string, err error) {
-	return pxy.PostXML("https://api.mch.weixin.qq.com/pay/unifiedorder", req)
-}
-
-// 查询订单.
-func OrderQuery(pxy *mch.Proxy, req map[string]string) (resp map[string]string, err error) {
-	return pxy.PostXML("https://api.mch.weixin.qq.com/pay/orderquery", req)
-}
-
 // 关闭订单.
-func CloseOrder(pxy *mch.Proxy, req map[string]string) (resp map[string]string, err error) {
-	return pxy.PostXML("https://api.mch.weixin.qq.com/pay/closeorder", req)
-}
-
-// 申请退款.
-//  NOTE: 请求需要双向证书.
-func Refund(pxy *mch.Proxy, req map[string]string) (resp map[string]string, err error) {
-	return pxy.PostXML("https://api.mch.weixin.qq.com/secapi/pay/refund", req)
+func CloseOrder(clt *core.Client, req map[string]string) (resp map[string]string, err error) {
+	return clt.PostXML("https://api.mch.weixin.qq.com/pay/closeorder", req)
 }
 
 // 查询退款.
-func RefundQuery(pxy *mch.Proxy, req map[string]string) (resp map[string]string, err error) {
-	return pxy.PostXML("https://api.mch.weixin.qq.com/pay/refundquery", req)
+func RefundQuery(clt *core.Client, req map[string]string) (resp map[string]string, err error) {
+	return clt.PostXML("https://api.mch.weixin.qq.com/pay/refundquery", req)
 }
 
 // 下载对账单到到文件.
@@ -94,7 +73,7 @@ func downloadBillToWriter(writer io.Writer, req map[string]string, httpClient *h
 	buf := make([]byte, 32*1024) // 与 io.copyBuffer 里的默认大小一致
 
 	reqBuf := bytes.NewBuffer(buf[:0])
-	if err = util.FormatMapToXML(reqBuf, req); err != nil {
+	if err = util.EncodeXMLFromMap(reqBuf, req, "xml"); err != nil {
 		return
 	}
 
@@ -118,7 +97,7 @@ func downloadBillToWriter(writer io.Writer, req map[string]string, httpClient *h
 			return
 		}
 		var n2 int64
-		n2, err = CopyBuffer(writer, httpResp.Body, buf)
+		n2, err = io.CopyBuffer(writer, httpResp.Body, buf)
 		written += n2
 		return
 	case err == io.ErrUnexpectedEOF:
@@ -126,7 +105,7 @@ func downloadBillToWriter(writer io.Writer, req map[string]string, httpClient *h
 		if index := bytes.Index(readBytes, downloadBillErrorRootNodeStartElement); index != -1 {
 			if bytes.Contains(readBytes[index+len(downloadBillErrorRootNodeStartElement):], downloadBillErrorReturnCodeNodeStartElement) {
 				// 可以认为是错误信息了, 尝试解析xml
-				var result mch.Error
+				var result core.Error
 				if err = xml.Unmarshal(readBytes, &result); err == nil {
 					err = &result
 					return

@@ -1,8 +1,3 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package material
 
 import (
@@ -12,14 +7,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type ImageInfo struct {
 	PicURL string `json:"pic_url"`
 }
 
-func Add(clt *mp.Client, imagePath, _type string) (info ImageInfo, err error) {
+func Add(clt *core.Client, imagePath, _type string) (info ImageInfo, err error) {
 	file, err := os.Open(imagePath)
 	if err != nil {
 		return
@@ -29,7 +24,7 @@ func Add(clt *mp.Client, imagePath, _type string) (info ImageInfo, err error) {
 	return addFromReader(clt, filepath.Base(imagePath), file, _type)
 }
 
-func AddFromReader(clt *mp.Client, filename string, reader io.Reader, _type string) (info ImageInfo, err error) {
+func AddFromReader(clt *core.Client, filename string, reader io.Reader, _type string) (info ImageInfo, err error) {
 	if filename == "" {
 		err = errors.New("empty filename")
 		return
@@ -42,9 +37,9 @@ func AddFromReader(clt *mp.Client, filename string, reader io.Reader, _type stri
 	return addFromReader(clt, filename, reader, _type)
 }
 
-func addFromReader(clt *mp.Client, filename string, reader io.Reader, _type string) (info ImageInfo, err error) {
+func addFromReader(clt *core.Client, filename string, reader io.Reader, _type string) (info ImageInfo, err error) {
 	var result struct {
-		mp.Error
+		core.Error
 		ImageInfo `json:"data"`
 	}
 
@@ -55,17 +50,17 @@ func addFromReader(clt *mp.Client, filename string, reader io.Reader, _type stri
 	} else {
 		incompleteURL = "https://api.weixin.qq.com/shakearound/material/add?access_token="
 	}
-	fields := []mp.MultipartFormField{{
-		ContentType: 0,
-		FieldName:   "media",
-		FileName:    filename,
-		Value:       reader,
+	fields := []core.MultipartFormField{{
+		IsFile:   true,
+		Name:     "media",
+		FileName: filename,
+		Value:    reader,
 	}}
 	if err = clt.PostMultipartForm(incompleteURL, fields, &result); err != nil {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

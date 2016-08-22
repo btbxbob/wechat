@@ -1,45 +1,25 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
-// 群发给用户列表的消息数据结构.
 package mass2users
 
 import (
-	"errors"
-	"fmt"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 const (
-	MsgTypeText   = "text"
-	MsgTypeImage  = "image"
-	MsgTypeVoice  = "voice"
-	MsgTypeVideo  = "mpvideo"
-	MsgTypeNews   = "mpnews"
-	MsgTypeWxCard = "wxcard"
+	MsgTypeText   core.MsgType = "text"
+	MsgTypeImage  core.MsgType = "image"
+	MsgTypeVoice  core.MsgType = "voice"
+	MsgTypeVideo  core.MsgType = "mpvideo"
+	MsgTypeNews   core.MsgType = "mpnews"
+	MsgTypeWxCard core.MsgType = "wxcard"
 )
 
-const ToUserCountLimit = 10000
-
-type MessageHeader struct {
-	ToUser  []string `json:"touser,omitempty"` // 长度不能超过 ToUserCountLimit
-	MsgType string   `json:"msgtype"`
-}
-
-func (header *MessageHeader) CheckValid() (err error) {
-	n := len(header.ToUser)
-	if n <= 0 {
-		return errors.New("用户列表是空的")
-	}
-	if n > ToUserCountLimit {
-		return fmt.Errorf("用户列表的长度不能超过 %d, 现在为 %d", ToUserCountLimit, n)
-	}
-	return
+type MsgHeader struct {
+	ToUser  []string     `json:"touser,omitempty"`
+	MsgType core.MsgType `json:"msgtype"`
 }
 
 type Text struct {
-	MessageHeader
+	MsgHeader
 	Text struct {
 		Content string `json:"content"`
 	} `json:"text"`
@@ -54,7 +34,7 @@ func NewText(toUser []string, content string) *Text {
 }
 
 type Image struct {
-	MessageHeader
+	MsgHeader
 	Image struct {
 		MediaId string `json:"media_id"`
 	} `json:"image"`
@@ -69,7 +49,7 @@ func NewImage(toUser []string, mediaId string) *Image {
 }
 
 type Voice struct {
-	MessageHeader
+	MsgHeader
 	Voice struct {
 		MediaId string `json:"media_id"` // mediaId 通过上传多媒体文件得到
 	} `json:"voice"`
@@ -84,14 +64,14 @@ func NewVoice(toUser []string, mediaId string) *Voice {
 }
 
 type Video struct {
-	MessageHeader
+	MsgHeader
 	Video struct {
 		MediaId string `json:"media_id"`
 	} `json:"mpvideo"`
 }
 
 // 新建视频消息.
-//  NOTE: 对于临时素材, mediaId 应该通过 media.Client.CreateVideo 得到
+//  NOTE: 对于临时素材, mediaId 应该通过 media.UploadVideo2 得到
 func NewVideo(toUser []string, mediaId string) *Video {
 	var msg Video
 	msg.MsgType = MsgTypeVideo
@@ -102,14 +82,14 @@ func NewVideo(toUser []string, mediaId string) *Video {
 
 // 图文消息
 type News struct {
-	MessageHeader
+	MsgHeader
 	News struct {
 		MediaId string `json:"media_id"`
 	} `json:"mpnews"`
 }
 
 // 新建图文消息.
-//  NOTE: 对于临时素材, mediaId 应该通过 media.Client.CreateNews 得到
+//  NOTE: 对于临时素材, mediaId 应该通过 media.UploadNews 得到
 func NewNews(toUser []string, mediaId string) *News {
 	var msg News
 	msg.MsgType = MsgTypeNews
@@ -120,17 +100,20 @@ func NewNews(toUser []string, mediaId string) *News {
 
 // 卡券消息
 type WxCard struct {
-	MessageHeader
+	MsgHeader
 	WxCard struct {
-		CardId string `json:"card_id"`
+		CardId  string `json:"card_id"`
+		CardExt string `json:"card_ext,omitempty"`
 	} `json:"wxcard"`
 }
 
 // 新建卡券, 特别注意: 目前该接口仅支持填入非自定义code的卡券和预存模式的自定义code卡券.
-func NewWxCard(toUser []string, cardId string) *WxCard {
+//  cardExt 可以为空
+func NewWxCard(toUser []string, cardId, cardExt string) *WxCard {
 	var msg WxCard
 	msg.MsgType = MsgTypeWxCard
 	msg.ToUser = toUser
 	msg.WxCard.CardId = cardId
+	msg.WxCard.CardExt = cardExt
 	return &msg
 }

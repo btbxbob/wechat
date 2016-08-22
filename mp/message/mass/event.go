@@ -1,26 +1,19 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package mass
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 const (
-	EventTypeMassSendJobFinish = "MASSSENDJOBFINISH"
+	EventTypeMassSendJobFinish core.EventType = "MASSSENDJOBFINISH"
 )
 
-// 高级群发消息, 事件推送群发结果
+// 事件推送群发结果
 type MassSendJobFinishEvent struct {
 	XMLName struct{} `xml:"xml" json:"-"`
-	mp.MessageHeader
-
-	Event string `xml:"Event" json:"Event"` // 事件信息, 此处为 MASSSENDJOBFINISH
-
-	MsgId int64 `xml:"MsgId" json:"MsgId"` // 群发的消息ID, 64位整型
+	core.MsgHeader
+	EventType core.EventType `xml:"Event" json:"Event"` // 事件信息, 此处为 MASSSENDJOBFINISH
+	MsgId     int64          `xml:"MsgId" json:"MsgId"` // 群发的消息ID, 64位整型
 
 	// 群发的结构, 为 "send success" 或 "send fail" 或 "err(num)".
 	// 但 send success 时, 也有可能因用户拒收公众号的消息, 系统错误等原因造成少量用户接收失败.
@@ -34,10 +27,8 @@ type MassSendJobFinishEvent struct {
 	// err(20013), //涉嫌版权
 	// err(22000), //涉嫌互推(互相宣传)
 	// err(21000), //涉嫌其他
-	Status string `xml:"Status" json:"Status"`
-
-	TotalCount int `xml:"TotalCount" json:"TotalCount"` // group_id 下粉丝数, 或者 openid_list 中的粉丝数
-
+	Status     string `xml:"Status"     json:"Status"`
+	TotalCount int    `xml:"TotalCount" json:"TotalCount"` // group_id 下粉丝数, 或者 openid_list 中的粉丝数
 	// 过滤(过滤是指特定地区, 性别的过滤, 用户设置拒收的过滤; 用户接收已超4条的过滤)后,
 	// 准备发送的粉丝数, 原则上, FilterCount = SentCount + ErrorCount
 	FilterCount int `xml:"FilterCount" json:"FilterCount"`
@@ -45,15 +36,15 @@ type MassSendJobFinishEvent struct {
 	ErrorCount  int `xml:"ErrorCount"  json:"ErrorCount"` // 发送失败的粉丝数
 }
 
-func GetMassSendJobFinishEvent(msg *mp.MixedMessage) *MassSendJobFinishEvent {
+func GetMassSendJobFinishEvent(msg *core.MixedMsg) *MassSendJobFinishEvent {
 	return &MassSendJobFinishEvent{
-		MessageHeader: msg.MessageHeader,
-		Event:         msg.Event,
-		MsgId:         msg.MsgID, // NOTE
-		Status:        msg.Status,
-		TotalCount:    msg.TotalCount,
-		FilterCount:   msg.FilterCount,
-		SentCount:     msg.SentCount,
-		ErrorCount:    msg.ErrorCount,
+		MsgHeader:   msg.MsgHeader,
+		EventType:   msg.EventType,
+		MsgId:       msg.MsgID, // NOTE
+		Status:      msg.Status,
+		TotalCount:  msg.TotalCount,
+		FilterCount: msg.FilterCount,
+		SentCount:   msg.SentCount,
+		ErrorCount:  msg.ErrorCount,
 	}
 }

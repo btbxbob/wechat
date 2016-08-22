@@ -1,16 +1,11 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package code
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 // Code解码接口
-func Decrypt(clt *mp.Client, encryptCode string) (code string, err error) {
+func Decrypt(clt *core.Client, encryptCode string) (code string, err error) {
 	request := struct {
 		EncryptCode string `json:"encrypt_code"`
 	}{
@@ -18,7 +13,7 @@ func Decrypt(clt *mp.Client, encryptCode string) (code string, err error) {
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		Code string `json:"code"`
 	}
 
@@ -27,7 +22,7 @@ func Decrypt(clt *mp.Client, encryptCode string) (code string, err error) {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

@@ -1,16 +1,11 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package statistics
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 // 以页面为维度的数据统计接口
-func Page(clt *mp.Client, pageId, beginDate, endDate int64) (data []StatisticsBase, err error) {
+func Page(clt *core.Client, pageId, beginDate, endDate int64) (data []StatisticsBase, err error) {
 	request := struct {
 		PageId    int64 `json:"page_id"`
 		BeginDate int64 `json:"begin_date"`
@@ -22,7 +17,7 @@ func Page(clt *mp.Client, pageId, beginDate, endDate int64) (data []StatisticsBa
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		Data []StatisticsBase `json:"data"`
 	}
 
@@ -31,7 +26,7 @@ func Page(clt *mp.Client, pageId, beginDate, endDate int64) (data []StatisticsBa
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

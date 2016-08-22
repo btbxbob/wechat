@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package device
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type AddParameters struct {
@@ -17,15 +12,15 @@ type AddParameters struct {
 }
 
 // 添加设备
-func Add(clt *mp.Client, para *AddParameters) (err error) {
-	var result mp.Error
+func Add(clt *core.Client, para *AddParameters) (err error) {
+	var result core.Error
 
 	incompleteURL := "https://api.weixin.qq.com/bizwifi/device/add?access_token="
 	if err = clt.PostJSON(incompleteURL, para, &result); err != nil {
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result
 		return
 	}

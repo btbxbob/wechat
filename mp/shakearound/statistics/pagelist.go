@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package statistics
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 const PageListPageSize = 50
@@ -24,7 +19,7 @@ type PageListResult struct {
 }
 
 // 批量查询设备统计数据接口
-func PageList(clt *mp.Client, date int64, pageIndex int) (rslt *PageListResult, err error) {
+func PageList(clt *core.Client, date int64, pageIndex int) (rslt *PageListResult, err error) {
 	request := struct {
 		Date      int64 `json:"date"`
 		PageIndex int   `json:"page_index"`
@@ -34,7 +29,7 @@ func PageList(clt *mp.Client, date int64, pageIndex int) (rslt *PageListResult, 
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		PageListResult
 	}
 
@@ -43,7 +38,7 @@ func PageList(clt *mp.Client, date int64, pageIndex int) (rslt *PageListResult, 
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}
@@ -72,13 +67,13 @@ func PageList(clt *mp.Client, date int64, pageIndex int) (rslt *PageListResult, 
 //      // TODO: 增加你的代码
 //  }
 type PageStatisticsIterator struct {
-	clt *mp.Client
+	clt *core.Client
 
 	date          int64
 	nextPageIndex int
 
 	lastPageListResult *PageListResult // 最近一次获取的数据
-	nextPageHasCalled  bool            // NextPage() 是否调用过
+	nextPageCalled     bool            // NextPage() 是否调用过
 }
 
 func (iter *PageStatisticsIterator) TotalCount() int {
@@ -86,7 +81,7 @@ func (iter *PageStatisticsIterator) TotalCount() int {
 }
 
 func (iter *PageStatisticsIterator) HasNext() bool {
-	if !iter.nextPageHasCalled { // 第一次调用需要特殊对待
+	if !iter.nextPageCalled { // 第一次调用需要特殊对待
 		return iter.lastPageListResult.ItemCount > 0
 	}
 
@@ -94,8 +89,8 @@ func (iter *PageStatisticsIterator) HasNext() bool {
 }
 
 func (iter *PageStatisticsIterator) NextPage() (statisticsList []PageStatistics, err error) {
-	if !iter.nextPageHasCalled { // 第一次调用需要特殊对待
-		iter.nextPageHasCalled = true
+	if !iter.nextPageCalled { // 第一次调用需要特殊对待
+		iter.nextPageCalled = true
 
 		statisticsList = iter.lastPageListResult.Data.PageStatisticsList
 		return
@@ -113,7 +108,7 @@ func (iter *PageStatisticsIterator) NextPage() (statisticsList []PageStatistics,
 	return
 }
 
-func NewPageStatisticsIterator(clt *mp.Client, date int64, pageIndex int) (iter *PageStatisticsIterator, err error) {
+func NewPageStatisticsIterator(clt *core.Client, date int64, pageIndex int) (iter *PageStatisticsIterator, err error) {
 	// 逻辑上相当于第一次调用 PageStatisticsIterator.NextPage, 因为第一次调用 PageStatisticsIterator.HasNext 需要数据支撑, 所以提前获取了数据
 
 	rslt, err := PageList(clt, date, pageIndex)
@@ -128,7 +123,7 @@ func NewPageStatisticsIterator(clt *mp.Client, date int64, pageIndex int) (iter 
 		nextPageIndex: pageIndex + 1,
 
 		lastPageListResult: rslt,
-		nextPageHasCalled:  false,
+		nextPageCalled:     false,
 	}
 	return
 }

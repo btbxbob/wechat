@@ -1,22 +1,23 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package jssdk
 
 import (
+	"bufio"
 	"crypto/sha1"
 	"encoding/hex"
+	"sort"
+	"strings"
 )
 
-// 微信 js-sdk wx.config 的参数签名.
+// JS-SDK wx.config 的参数签名.
 func WXConfigSign(jsapiTicket, nonceStr, timestamp, url string) (signature string) {
+	if i := strings.IndexByte(url, '#'); i >= 0 {
+		url = url[:i]
+	}
+
 	n := len("jsapi_ticket=") + len(jsapiTicket) +
 		len("&noncestr=") + len(nonceStr) +
 		len("&timestamp=") + len(timestamp) +
 		len("&url=") + len(url)
-
 	buf := make([]byte, 0, n)
 
 	buf = append(buf, "jsapi_ticket="...)
@@ -30,4 +31,19 @@ func WXConfigSign(jsapiTicket, nonceStr, timestamp, url string) (signature strin
 
 	hashsum := sha1.Sum(buf)
 	return hex.EncodeToString(hashsum[:])
+}
+
+// JS-SDK 卡券 API 参数签名.
+func CardSign(strs []string) (signature string) {
+	sort.Strings(strs)
+
+	h := sha1.New()
+
+	bufw := bufio.NewWriterSize(h, 128) // sha1.BlockSize 的整数倍
+	for _, str := range strs {
+		bufw.WriteString(str)
+	}
+	bufw.Flush()
+
+	return hex.EncodeToString(h.Sum(nil))
 }

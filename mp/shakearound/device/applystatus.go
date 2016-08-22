@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com), magicshui(shuiyuzhe@gmail.com), Harry Rong(harrykobe@gmail.com)
-
 package device
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type ApplyStatus struct {
@@ -17,7 +12,7 @@ type ApplyStatus struct {
 }
 
 // 查询设备ID申请审核状态
-func GetApplyStatus(clt *mp.Client, applyId int64) (status *ApplyStatus, err error) {
+func GetApplyStatus(clt *core.Client, applyId int64) (status *ApplyStatus, err error) {
 	request := struct {
 		ApplyId int64 `json:"apply_id"`
 	}{
@@ -25,7 +20,7 @@ func GetApplyStatus(clt *mp.Client, applyId int64) (status *ApplyStatus, err err
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		ApplyStatus `json:"data"`
 	}
 
@@ -34,7 +29,7 @@ func GetApplyStatus(clt *mp.Client, applyId int64) (status *ApplyStatus, err err
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

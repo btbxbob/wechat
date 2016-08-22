@@ -1,12 +1,7 @@
-// @description wechat 是腾讯微信公众平台 api 的 golang 语言封装
-// @link        https://github.com/chanxuehong/wechat for the canonical source repository
-// @license     https://github.com/chanxuehong/wechat/blob/master/LICENSE
-// @authors     chanxuehong(chanxuehong@gmail.com)
-
 package statistics
 
 import (
-	"github.com/chanxuehong/wechat/mp"
+	"github.com/chanxuehong/wechat.v2/mp/core"
 )
 
 type Statistics struct {
@@ -22,7 +17,7 @@ type Statistics struct {
 //  shopId     按门店ID搜索，-1为总统计
 //  beginDate: 起始日期时间，格式yyyy-mm-dd，最长时间跨度为30天
 //  endDate:   结束日期时间戳，格式yyyy-mm-dd，最长时间跨度为30天
-func List(clt *mp.Client, shopId int64, beginDate, endDate string) (data []Statistics, err error) {
+func List(clt *core.Client, shopId int64, beginDate, endDate string) (data []Statistics, err error) {
 	request := struct {
 		ShopId    int64  `json:"shop_id"`
 		BeginDate string `json:"begin_date"`
@@ -34,7 +29,7 @@ func List(clt *mp.Client, shopId int64, beginDate, endDate string) (data []Stati
 	}
 
 	var result struct {
-		mp.Error
+		core.Error
 		Data []Statistics `json:"data"`
 	}
 
@@ -43,7 +38,7 @@ func List(clt *mp.Client, shopId int64, beginDate, endDate string) (data []Stati
 		return
 	}
 
-	if result.ErrCode != mp.ErrCodeOK {
+	if result.ErrCode != core.ErrCodeOK {
 		err = &result.Error
 		return
 	}

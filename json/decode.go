@@ -29,14 +29,15 @@ import (
 // with the following additional rules:
 //
 // To unmarshal JSON into a pointer, Unmarshal first handles the case of
-// the JSON being the JSON literal null.  In that case, Unmarshal sets
-// the pointer to nil.  Otherwise, Unmarshal unmarshals the JSON into
-// the value pointed at by the pointer.  If the pointer is nil, Unmarshal
+// the JSON being the JSON literal null. In that case, Unmarshal sets
+// the pointer to nil. Otherwise, Unmarshal unmarshals the JSON into
+// the value pointed at by the pointer. If the pointer is nil, Unmarshal
 // allocates a new value for it to point to.
 //
 // To unmarshal JSON into a struct, Unmarshal matches incoming object
 // keys to the keys used by Marshal (either the struct field name or its tag),
 // preferring an exact match but also accepting a case-insensitive match.
+// Unmarshal will only set exported fields of the struct.
 //
 // To unmarshal JSON into an interface value,
 // Unmarshal stores one of these in the interface value:
@@ -533,7 +534,7 @@ func (d *decodeState) array(v reflect.Value) {
 
 	if i < v.Len() {
 		if v.Kind() == reflect.Array {
-			// Array.  Zero the rest.
+			// Array. Zero the rest.
 			z := reflect.Zero(v.Type().Elem())
 			for ; i < v.Len(); i++ {
 				v.Index(i).Set(z)
@@ -815,7 +816,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		}
 		switch v.Kind() {
 		default:
-			d.saveError(&UnmarshalTypeError{"string", v.Type(), int64(d.off)})
+			unmarshalStringToNumberOrBoolean(d, s, v, fromQuoted) // d.saveError(&UnmarshalTypeError{"string", v.Type(), int64(d.off)})
 		case reflect.Slice:
 			if v.Type().Elem().Kind() != reflect.Uint8 {
 				d.saveError(&UnmarshalTypeError{"string", v.Type(), int64(d.off)})
@@ -849,7 +850,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		s := string(item)
 		switch v.Kind() {
 		default:
-			if v.Kind() == reflect.String && v.Type() == numberType {
+			if vtype := v.Type(); v.Kind() == reflect.String && (vtype == numberType || vtype == jsonNumberType) { // if v.Kind() == reflect.String && v.Type() == numberType {
 				v.SetString(s)
 				if !isValidNumber(s) {
 					d.error(fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item))
@@ -901,7 +902,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 }
 
 // The xxxInterface routines build up a value to be stored
-// in an empty interface.  They are not strictly necessary,
+// in an empty interface. They are not strictly necessary,
 // but they avoid the weight of reflection in this common case.
 
 // valueInterface is like value but returns interface{}
@@ -1063,7 +1064,7 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 	r := 0
 	for r < len(s) {
 		c := s[r]
-		if c == '\\' || c == '"' || c < ' ' {
+		if c == '\\' || c == '"' /* || c < ' ' */ {
 			break
 		}
 		if c < utf8.RuneSelf {
@@ -1146,7 +1147,7 @@ func unquoteBytes(s []byte) (t []byte, ok bool) {
 			}
 
 		// Quote, control characters are invalid.
-		case c == '"', c < ' ':
+		case c == '"' /* , c < ' ' */ :
 			return
 
 		// ASCII
